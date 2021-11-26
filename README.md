@@ -1,3 +1,6 @@
+魔改一波，使其支持WiFi和Cellular双通道传输
+
+
 KCP - A Fast and Reliable ARQ Protocol
 ======================================
 
