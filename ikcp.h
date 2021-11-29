@@ -12,9 +12,10 @@
 #ifndef __IKCP_H__
 #define __IKCP_H__
 
+#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <assert.h>
+#include <stdint.h>
 
 //=====================================================================
 // 32BIT INTEGER DEFINITION
