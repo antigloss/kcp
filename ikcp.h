@@ -277,6 +277,12 @@ typedef struct {
     uint16_t AvgRTTDelta;
 } ChannelInfo;
 
+typedef struct {
+    uint32_t Sn;
+    uint32_t Ts;
+    uint8_t ChannelID;
+} AckInfo;
+
 //---------------------------------------------------------------------
 // IKCPCB
 //---------------------------------------------------------------------
@@ -297,7 +303,7 @@ struct IKCPCB {
     struct IQUEUEHEAD rcv_queue;
     struct IQUEUEHEAD snd_buf;
     struct IQUEUEHEAD rcv_buf;
-    IUINT32* acklist;
+    AckInfo* acklist;
     IUINT32 ackcount;
     IUINT32 ackblock;
     void* user;

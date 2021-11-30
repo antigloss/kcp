@@ -645,30 +645,21 @@ static void ikcp_parse_fastack(ikcpcb* kcp, IUINT32 sn, IUINT32 ts)
 //---------------------------------------------------------------------
 // ack append
 //---------------------------------------------------------------------
-static void ikcp_ack_push(ikcpcb* kcp, IUINT32 sn, IUINT32 ts)
+static void ikcp_ack_push(ikcpcb* kcp, IUINT32 sn, IUINT32 ts, uint8_t channelID)
 {
     IUINT32 newsize = kcp->ackcount + 1;
-    IUINT32* ptr;
 
     if (newsize > kcp->ackblock) {
-        IUINT32* acklist;
         IUINT32 newblock;
-
         for (newblock = 8; newblock < newsize; newblock <<= 1)
             ;
-        acklist = (IUINT32*)ikcp_malloc(newblock * sizeof(IUINT32) * 2);
-
+        AckInfo* acklist = ikcp_malloc(newblock * sizeof(AckInfo));
         if (acklist == NULL) {
-            assert(acklist != NULL);
             abort();
         }
 
         if (kcp->acklist != NULL) {
-            IUINT32 x;
-            for (x = 0; x < kcp->ackcount; x++) {
-                acklist[x * 2 + 0] = kcp->acklist[x * 2 + 0];
-                acklist[x * 2 + 1] = kcp->acklist[x * 2 + 1];
-            }
+            memcpy(acklist, kcp->acklist, kcp->ackcount * sizeof(AckInfo));
             ikcp_free(kcp->acklist);
         }
 
@@ -676,18 +667,11 @@ static void ikcp_ack_push(ikcpcb* kcp, IUINT32 sn, IUINT32 ts)
         kcp->ackblock = newblock;
     }
 
-    ptr = &kcp->acklist[kcp->ackcount * 2];
-    ptr[0] = sn;
-    ptr[1] = ts;
-    kcp->ackcount++;
-}
-
-static void ikcp_ack_get(const ikcpcb* kcp, int p, IUINT32* sn, IUINT32* ts)
-{
-    if (sn)
-        sn[0] = kcp->acklist[p * 2 + 0];
-    if (ts)
-        ts[0] = kcp->acklist[p * 2 + 1];
+    AckInfo* ack = &kcp->acklist[kcp->ackcount];
+    ack->Sn = sn;
+    ack->Ts = ts;
+    ack->ChannelID = channelID;
+    ++(kcp->ackcount);
 }
 
 //---------------------------------------------------------------------
@@ -800,15 +784,15 @@ int ikcp_input(ikcpcb* kcp, const char* data, long size, uint8_t channelID)
             return -3;
 
         kcp->rmt_wnd = wnd;
-        ikcp_parse_una(kcp, una);
+        ikcp_parse_una(kcp, una); // 从发送缓存中移除已经收到了ACK的数据
         ikcp_shrink_buf(kcp);
 
         if (cmd == IKCP_CMD_ACK) {
             IUINT32 rtt = kcp->current - ts;
             if (rtt >= 0 && rtt < 5000) {
-                ikcp_update_ack(kcp, rtt, channelID);
+                ikcp_update_ack(kcp, rtt, channelID); // 统计RTT
             }
-            ikcp_parse_ack(kcp, sn);
+            ikcp_parse_ack(kcp, sn); // 从发送缓存中移除收到了ACK的数据
             ikcp_shrink_buf(kcp);
             if (flag == 0) {
                 flag = 1;
@@ -835,7 +819,7 @@ int ikcp_input(ikcpcb* kcp, const char* data, long size, uint8_t channelID)
                 ikcp_log(kcp, IKCP_LOG_IN_DATA, "input psh: sn=%lu ts=%lu", (unsigned long)sn, (unsigned long)ts);
             }
             if (_itimediff(sn, kcp->rcv_nxt + kcp->rcv_wnd) < 0) {
-                ikcp_ack_push(kcp, sn, ts);
+                ikcp_ack_push(kcp, sn, ts, channelID);
                 if (_itimediff(sn, kcp->rcv_nxt) >= 0) {
                     seg = ikcp_segment_new(kcp, len);
                     seg->conv = conv;
@@ -968,7 +952,10 @@ void ikcp_flush(ikcpcb* kcp)
             ikcp_output(kcp, buffer, size);
             ptr = buffer;
         }
-        ikcp_ack_get(kcp, i, &seg.sn, &seg.ts);
+
+        seg.sn = kcp->acklist[i].Sn;
+        seg.ts = kcp->acklist[i].Ts;
+        // TODO andy: ChannelID
         ptr = ikcp_encode_seg(ptr, &seg);
     }
 
