@@ -206,8 +206,6 @@ static int ikcp_canlog(const ikcpcb* kcp, int mask)
 // output segment
 static int ikcp_output(ikcpcb* kcp, const void* data, int size)
 {
-    assert(kcp);
-    assert(kcp->output);
     if (ikcp_canlog(kcp, IKCP_LOG_OUTPUT)) {
         ikcp_log(kcp, IKCP_LOG_OUTPUT, "[RO] %ld bytes", (long)size);
     }
@@ -361,23 +359,15 @@ void ikcp_setoutput(ikcpcb* kcp, int (*output)(const char* buf, int len, ikcpcb*
 int ikcp_recv(ikcpcb* kcp, char* buffer, int len)
 {
     struct IQUEUEHEAD* p;
-    int ispeek = (len < 0) ? 1 : 0;
-    int peeksize;
     int recover = 0;
     IKCPSEG* seg;
-    assert(kcp);
 
     if (iqueue_is_empty(&kcp->rcv_queue))
         return -1;
 
-    if (len < 0)
-        len = -len;
-
-    peeksize = ikcp_peeksize(kcp);
-
+    int peeksize = ikcp_peeksize(kcp);
     if (peeksize < 0)
         return -2;
-
     if (peeksize > len)
         return -3;
 
@@ -402,11 +392,9 @@ int ikcp_recv(ikcpcb* kcp, char* buffer, int len)
             ikcp_log(kcp, IKCP_LOG_RECV, "recv sn=%lu", (unsigned long)seg->sn);
         }
 
-        if (ispeek == 0) {
-            iqueue_del(&seg->node);
-            ikcp_segment_delete(kcp, seg);
-            kcp->nrcv_que--;
-        }
+        iqueue_del(&seg->node);
+        ikcp_segment_delete(kcp, seg);
+        kcp->nrcv_que--;
 
         if (fragment == 0)
             break;
@@ -478,7 +466,7 @@ int ikcp_send(ikcpcb* kcp, const char* buffer, int len)
     int count, i;
 
     assert(kcp->mss > 0);
-    if (len < 0)
+    if (len <= 0)
         return -1;
 
     // append to previous segment in streaming mode (if possible)
@@ -519,28 +507,21 @@ int ikcp_send(ikcpcb* kcp, const char* buffer, int len)
     if (count >= (int)IKCP_WND_RCV)
         return -2;
 
-    if (count == 0)
-        count = 1;
-
     // fragment
     for (i = 0; i < count; i++) {
         int size = len > (int)kcp->mss ? (int)kcp->mss : len;
         seg = ikcp_segment_new(kcp, size);
-        assert(seg);
         if (seg == NULL) {
             return -2;
         }
-        if (buffer && len > 0) {
-            memcpy(seg->data, buffer, size);
-        }
+
+        memcpy(seg->data, buffer, size);
         seg->len = size;
         seg->frg = (kcp->stream == 0) ? (count - i - 1) : 0;
         iqueue_init(&seg->node);
         iqueue_add_tail(&seg->node, &kcp->snd_queue);
         kcp->nsnd_que++;
-        if (buffer) {
-            buffer += size;
-        }
+        buffer += size;
         len -= size;
     }
 
