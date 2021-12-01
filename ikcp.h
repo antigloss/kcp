@@ -422,16 +422,6 @@ inline void ikcp_disable_channel(ikcpcb* kcp, uint8_t channelID)
     }
 }
 
-inline void ikcp_enable_full_dual_channel(ikcpcb* kcp)
-{
-    kcp->FullDualChannel = 1;
-}
-
-inline void ikcp_disable_full_dual_channel(ikcpcb* kcp)
-{
-    kcp->FullDualChannel = 0;
-}
-
 #ifdef __cplusplus
 }
 #endif
