@@ -275,6 +275,10 @@ typedef struct {
     uint8_t Enabled;
     uint16_t AvgRTT;
     uint16_t AvgRTTDelta;
+    uint16_t LastDataSentTimeMS; // 上一次发送有效数据的时间戳，毫秒
+    uint16_t BufferCapacity;
+    uint16_t BufferSize;
+    char* Buffer;
 } ChannelInfo;
 
 typedef struct {
@@ -290,6 +294,7 @@ struct IKCPCB {
     IUINT32 conv, mtu, mss, state;
     IUINT32 snd_una, snd_nxt, rcv_nxt;
     IUINT32 ts_recent, ts_lastack, ssthresh;
+    uint8_t FullDualChannel;
     ChannelInfo Channels[kMaxChannelCount];
     IINT32 rx_rto, rx_minrto;
     IUINT32 snd_wnd, rcv_wnd, rmt_wnd, cwnd, probe;
@@ -307,12 +312,11 @@ struct IKCPCB {
     IUINT32 ackcount;
     IUINT32 ackblock;
     void* user;
-    char* buffer;
     int fastresend;
     int fastlimit;
     int nocwnd, stream;
     int logmask;
-    int (*output)(const char* buf, int len, struct IKCPCB* kcp, void* user);
+    int (*output)(const char* buf, int len, uint8_t channelID, void* user);
     void (*writelog)(const char* log, struct IKCPCB* kcp, void* user);
 };
 
@@ -348,7 +352,7 @@ ikcpcb* ikcp_create(IUINT32 conv, void* user);
 void ikcp_release(ikcpcb* kcp);
 
 // set output callback, which will be invoked by kcp
-void ikcp_setoutput(ikcpcb* kcp, int (*output)(const char* buf, int len, ikcpcb* kcp, void* user));
+void ikcp_setoutput(ikcpcb* kcp, int (*output)(const char* buf, int len, uint8_t channelID, void* user));
 
 // user/upper level recv: returns size, returns below zero for EAGAIN
 int ikcp_recv(ikcpcb* kcp, char* buffer, int len);
@@ -402,6 +406,31 @@ void ikcp_allocator(void* (*new_malloc)(size_t), void (*new_free)(void*));
 
 // read conv
 IUINT32 ikcp_getconv(const void* ptr);
+
+inline void ikcp_enable_channel(ikcpcb* kcp, uint8_t channelID)
+{
+    if (channelID < kMaxChannelCount) {
+        kcp->Channels[channelID].Enabled = 1;
+        kcp->Channels[channelID].LastDataSentTimeMS = 0;
+    }
+}
+
+inline void ikcp_disable_channel(ikcpcb* kcp, uint8_t channelID)
+{
+    if (channelID < kMaxChannelCount) {
+        kcp->Channels[channelID].Enabled = 0;
+    }
+}
+
+inline void ikcp_enable_full_dual_channel(ikcpcb* kcp)
+{
+    kcp->FullDualChannel = 1;
+}
+
+inline void ikcp_disable_full_dual_channel(ikcpcb* kcp)
+{
+    kcp->FullDualChannel = 0;
+}
 
 #ifdef __cplusplus
 }

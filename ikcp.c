@@ -203,17 +203,6 @@ static int ikcp_canlog(const ikcpcb* kcp, int mask)
     return 1;
 }
 
-// output segment
-static int ikcp_output(ikcpcb* kcp, const void* data, int size)
-{
-    if (ikcp_canlog(kcp, IKCP_LOG_OUTPUT)) {
-        ikcp_log(kcp, IKCP_LOG_OUTPUT, "[RO] %ld bytes", (long)size);
-    }
-    if (size == 0)
-        return 0;
-    return kcp->output((const char*)data, size, kcp, kcp->user);
-}
-
 // output queue
 void ikcp_qprint(const char* name, const struct IQUEUEHEAD* head)
 {
@@ -256,12 +245,6 @@ ikcpcb* ikcp_create(IUINT32 conv, void* user)
     kcp->mss = kcp->mtu - IKCP_OVERHEAD;
     kcp->stream = 0;
 
-    kcp->buffer = (char*)ikcp_malloc((kcp->mtu + IKCP_OVERHEAD) * 3);
-    if (kcp->buffer == NULL) {
-        ikcp_free(kcp);
-        return NULL;
-    }
-
     iqueue_init(&kcp->snd_queue);
     iqueue_init(&kcp->rcv_queue);
     iqueue_init(&kcp->snd_buf);
@@ -274,10 +257,18 @@ ikcpcb* ikcp_create(IUINT32 conv, void* user)
     kcp->acklist = NULL;
     kcp->ackblock = 0;
     kcp->ackcount = 0;
+    kcp->FullDualChannel = 0;
     for (int i = 0; i != kMaxChannelCount; ++i) {
         kcp->Channels[i].Enabled = 0;
         kcp->Channels[i].AvgRTT = 80;
         kcp->Channels[i].AvgRTTDelta = 20;
+        kcp->Channels[i].BufferCapacity = kcp->mtu;
+        kcp->Channels[i].BufferSize = 0;
+        kcp->Channels[i].Buffer = ikcp_malloc(kcp->mtu);
+        if (kcp->Channels[i].Buffer == NULL) {
+            ikcp_free(kcp);
+            return NULL;
+        }
     }
     kcp->rx_rto = IKCP_RTO_DEF;
     kcp->rx_minrto = IKCP_RTO_MIN;
@@ -327,8 +318,9 @@ void ikcp_release(ikcpcb* kcp)
             iqueue_del(&seg->node);
             ikcp_segment_delete(kcp, seg);
         }
-        if (kcp->buffer) {
-            ikcp_free(kcp->buffer);
+        for (int i = 0; i != kMaxChannelCount; ++i) {
+            ikcp_free(kcp->Channels[i].Buffer);
+            kcp->Channels[i].Buffer = NULL;
         }
         if (kcp->acklist) {
             ikcp_free(kcp->acklist);
@@ -339,7 +331,6 @@ void ikcp_release(ikcpcb* kcp)
         kcp->nrcv_que = 0;
         kcp->nsnd_que = 0;
         kcp->ackcount = 0;
-        kcp->buffer = NULL;
         kcp->acklist = NULL;
         ikcp_free(kcp);
     }
@@ -348,7 +339,7 @@ void ikcp_release(ikcpcb* kcp)
 //---------------------------------------------------------------------
 // set output callback, which will be invoked by kcp
 //---------------------------------------------------------------------
-void ikcp_setoutput(ikcpcb* kcp, int (*output)(const char* buf, int len, ikcpcb* kcp, void* user))
+void ikcp_setoutput(ikcpcb* kcp, int (*output)(const char* buf, int len, uint8_t channelID, void* user))
 {
     kcp->output = output;
 }
@@ -901,9 +892,6 @@ static int ikcp_wnd_unused(const ikcpcb* kcp)
 void ikcp_flush(ikcpcb* kcp)
 {
     IUINT32 current = kcp->current;
-    char* buffer = kcp->buffer;
-    char* ptr = buffer;
-    int count, size, i;
     IUINT32 resent, cwnd;
     IUINT32 rtomin;
     struct IQUEUEHEAD* p;
@@ -911,9 +899,11 @@ void ikcp_flush(ikcpcb* kcp)
     int lost = 0;
     IKCPSEG seg;
 
-    // 'ikcp_update' haven't been called.
-    if (kcp->updated == 0)
+    ChannelInfo* c0 = &kcp->Channels[0];
+    ChannelInfo* c1 = &kcp->Channels[1];
+    if (kcp->updated == 0 || (!c0->Enabled && !c1->Enabled)) { // 尚未调用ikcp_update或者无可用传输通道
         return;
+    }
 
     seg.conv = kcp->conv;
     seg.cmd = IKCP_CMD_ACK;
@@ -925,21 +915,30 @@ void ikcp_flush(ikcpcb* kcp)
     seg.ts = 0;
 
     // flush acknowledges
-    count = kcp->ackcount;
-    for (i = 0; i < count; i++) {
-        // TODO andy: 可以在这里区分WiFi和Cellular的ACK
-        size = (int)(ptr - buffer);
-        if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu) {
-            ikcp_output(kcp, buffer, size);
-            ptr = buffer;
+    for (uint32_t i = 0; i != kcp->ackcount; ++i) {
+        AckInfo* ack = &kcp->acklist[i];
+        ChannelInfo* c = &kcp->Channels[ack->ChannelID]; // 使用相同的通道ACK从该通道收到的数据
+        if (!c->Enabled) {
+            continue;
         }
 
-        seg.sn = kcp->acklist[i].Sn;
-        seg.ts = kcp->acklist[i].Ts;
-        // TODO andy: ChannelID
-        ptr = ikcp_encode_seg(ptr, &seg);
-    }
+        if (c->BufferSize > kcp->mss) {
+            kcp->output(c->Buffer, c->BufferSize, ack->ChannelID, kcp->user);
+            c->BufferSize = 0;
+        }
 
+        seg.sn = ack->Sn;
+        seg.ts = ack->Ts;
+        ikcp_encode_seg(c->Buffer + c->BufferSize, &seg);
+        c->BufferSize += IKCP_OVERHEAD;
+    }
+    for (uint8_t i = 0; i != kMaxChannelCount; ++i) {
+        ChannelInfo* c = &kcp->Channels[i];
+        if (c->BufferSize) {
+            kcp->output(c->Buffer, c->BufferSize, i, kcp->user);
+            c->BufferSize = 0;
+        }
+    }
     kcp->ackcount = 0;
 
     // probe window size (if remote window size equals zero)
@@ -963,28 +962,28 @@ void ikcp_flush(ikcpcb* kcp)
         kcp->probe_wait = 0;
     }
 
+    uint8_t useCellular;
+    if (c1->Enabled && (kcp->FullDualChannel || !c0->Enabled || (uint16_t)current - c1->LastDataSentTimeMS > 2000 ||
+                        (c0->AvgRTT > c1->AvgRTT && c0->AvgRTT - c1->AvgRTT > 30))) {
+        useCellular = 1;
+    } else {
+        useCellular = 0;
+    }
+
     // flush window probing commands
     if (kcp->probe & IKCP_ASK_SEND) {
         seg.cmd = IKCP_CMD_WASK;
-        size = (int)(ptr - buffer);
-        if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu) {
-            ikcp_output(kcp, buffer, size);
-            ptr = buffer;
-        }
-        ptr = ikcp_encode_seg(ptr, &seg);
+        ChannelInfo* c = &kcp->Channels[useCellular];
+        ikcp_encode_seg(c->Buffer, &seg); // 此时c->BufferSize肯定为0，故无需相加
+        c->BufferSize += IKCP_OVERHEAD;
     }
-
     // flush window probing commands
     if (kcp->probe & IKCP_ASK_TELL) {
         seg.cmd = IKCP_CMD_WINS;
-        size = (int)(ptr - buffer);
-        if (size + (int)IKCP_OVERHEAD > (int)kcp->mtu) {
-            ikcp_output(kcp, buffer, size);
-            ptr = buffer;
-        }
-        ptr = ikcp_encode_seg(ptr, &seg);
+        ChannelInfo* c = &kcp->Channels[useCellular];
+        ikcp_encode_seg(c->Buffer + c->BufferSize, &seg); // c->Buffer此时肯定足以装下这两个控制数据包，故无需调用kcp->output()
+        c->BufferSize += IKCP_OVERHEAD;
     }
-
     kcp->probe = 0;
 
     // calculate window size
@@ -994,12 +993,10 @@ void ikcp_flush(ikcpcb* kcp)
 
     // move data from snd_queue to snd_buf
     while (_itimediff(kcp->snd_nxt, kcp->snd_una + cwnd) < 0) {
-        IKCPSEG* newseg;
         if (iqueue_is_empty(&kcp->snd_queue))
             break;
 
-        newseg = iqueue_entry(kcp->snd_queue.next, IKCPSEG, node);
-
+        IKCPSEG* newseg = iqueue_entry(kcp->snd_queue.next, IKCPSEG, node);
         iqueue_del(&newseg->node);
         iqueue_add_tail(&newseg->node, &kcp->snd_buf);
         kcp->nsnd_que--;
@@ -1031,7 +1028,7 @@ void ikcp_flush(ikcpcb* kcp)
             segment->rto = kcp->rx_rto;
             segment->resendts = current + segment->rto + rtomin;
         } else if (_itimediff(current, segment->resendts) >= 0) {
-            needsend = 1;
+            needsend = 2;
             segment->xmit++;
             kcp->xmit++;
             if (kcp->nodelay == 0) {
@@ -1044,7 +1041,7 @@ void ikcp_flush(ikcpcb* kcp)
             lost = 1;
         } else if (segment->fastack >= resent) {
             if ((int)segment->xmit <= kcp->fastlimit || kcp->fastlimit <= 0) {
-                needsend = 1;
+                needsend = 2;
                 segment->xmit++;
                 segment->fastack = 0;
                 segment->resendts = current + segment->rto;
@@ -1058,20 +1055,28 @@ void ikcp_flush(ikcpcb* kcp)
             segment->wnd = seg.wnd;
             segment->una = kcp->rcv_nxt;
 
-            size = (int)(ptr - buffer);
-            need = IKCP_OVERHEAD + segment->len;
-
-            if (size + need > (int)kcp->mtu) {
-                ikcp_output(kcp, buffer, size);
-                ptr = buffer;
+            ChannelInfo* c;
+            if (!useCellular && (needsend != 2 || !c1->Enabled)) {
+                c = c0;
+            } else {
+                c = c1;
+                c->LastDataSentTimeMS = current;
             }
 
-            ptr = ikcp_encode_seg(ptr, segment);
-
-            if (segment->len > 0) {
-                memcpy(ptr, segment->data, segment->len);
-                ptr += segment->len;
+            if (c->BufferSize + segment->len > kcp->mss) {
+                if (c0->Enabled) {
+                    kcp->output(c->Buffer, c->BufferSize, 0, kcp->user);
+                }
+                if (c == c1) {
+                    kcp->output(c->Buffer, c->BufferSize, 1, kcp->user);
+                }
+                c->BufferSize = 0;
             }
+
+            ikcp_encode_seg(c->Buffer + c->BufferSize, segment);
+            c->BufferSize += IKCP_OVERHEAD;
+            memcpy(c->Buffer + c->BufferSize, segment->data, segment->len);
+            c->BufferSize += segment->len;
 
             if (segment->xmit >= kcp->dead_link) {
                 kcp->state = (IUINT32)-1;
@@ -1080,9 +1085,12 @@ void ikcp_flush(ikcpcb* kcp)
     }
 
     // flash remain segments
-    size = (int)(ptr - buffer);
-    if (size > 0) {
-        ikcp_output(kcp, buffer, size);
+    for (uint8_t i = 0; i != kMaxChannelCount; ++i) {
+        ChannelInfo* c = &kcp->Channels[i];
+        if (c->BufferSize) {
+            kcp->output(c->Buffer, c->BufferSize, i, kcp->user);
+            c->BufferSize = 0;
+        }
     }
 
     // update ssthresh
@@ -1191,16 +1199,27 @@ IUINT32 ikcp_check(const ikcpcb* kcp, IUINT32 current)
 
 int ikcp_setmtu(ikcpcb* kcp, int mtu)
 {
-    char* buffer;
-    if (mtu < 50 || mtu < (int)IKCP_OVERHEAD)
+    if (mtu < 200 || mtu > 1400) {
         return -1;
-    buffer = (char*)ikcp_malloc((mtu + IKCP_OVERHEAD) * 3);
-    if (buffer == NULL)
-        return -2;
+    }
+
+    for (int i = 0; i != kMaxChannelCount; ++i) {
+        if (kcp->Channels[i].BufferCapacity >= mtu) {
+            continue;
+        }
+
+        char* buf = ikcp_malloc(mtu);
+        if (buf == NULL) {
+            return -2;
+        }
+
+        kcp->Channels[i].BufferCapacity = mtu;
+        free(kcp->Channels[i].Buffer);
+        kcp->Channels[i].Buffer = buf;
+    }
+
     kcp->mtu = mtu;
-    kcp->mss = kcp->mtu - IKCP_OVERHEAD;
-    ikcp_free(kcp->buffer);
-    kcp->buffer = buffer;
+    kcp->mss = mtu - IKCP_OVERHEAD;
     return 0;
 }
 
