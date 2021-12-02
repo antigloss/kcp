@@ -963,7 +963,7 @@ void ikcp_flush(ikcpcb* kcp)
     }
 
     uint8_t useCellular;
-    if (c1->Enabled && (kcp->FullDualChannel || !c0->Enabled || (uint16_t)current - c1->LastDataSentTimeMS > 2000 ||
+    if (c1->Enabled && (kcp->FullDualChannel || !c0->Enabled || (uint32_t)(current - c1->LastDataSentTimeMS) > 2000 ||
                         (c0->AvgRTT > c1->AvgRTT && c0->AvgRTT - c1->AvgRTT > 30))) {
         useCellular = 1;
     } else {

@@ -275,7 +275,7 @@ typedef struct {
     uint8_t Enabled;
     uint16_t AvgRTT;
     uint16_t AvgRTTDelta;
-    uint16_t LastDataSentTimeMS; // 上一次发送有效数据的时间戳，毫秒
+    uint32_t LastDataSentTimeMS; // 上一次发送有效数据的时间戳，毫秒
     uint16_t BufferCapacity;
     uint16_t BufferSize;
     char* Buffer;
