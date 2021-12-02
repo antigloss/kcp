@@ -1085,12 +1085,16 @@ void ikcp_flush(ikcpcb* kcp)
     }
 
     // flash remain segments
-    for (uint8_t i = 0; i != kMaxChannelCount; ++i) {
-        ChannelInfo* c = &kcp->Channels[i];
-        if (c->BufferSize) {
-            kcp->output(c->Buffer, c->BufferSize, i, kcp->user);
-            c->BufferSize = 0;
+    if (c0->BufferSize) {
+        kcp->output(c0->Buffer, c0->BufferSize, 0, kcp->user);
+        c0->BufferSize = 0;
+    }
+    if (c1->BufferSize) {
+        if (c0->Enabled) {
+            kcp->output(c1->Buffer, c1->BufferSize, 0, kcp->user);
         }
+        kcp->output(c1->Buffer, c1->BufferSize, 1, kcp->user);
+        c1->BufferSize = 0;
     }
 
     // update ssthresh

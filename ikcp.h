@@ -410,8 +410,12 @@ IUINT32 ikcp_getconv(const void* ptr);
 inline void ikcp_enable_channel(ikcpcb* kcp, uint8_t channelID)
 {
     if (channelID < kMaxChannelCount) {
-        kcp->Channels[channelID].Enabled = 1;
-        kcp->Channels[channelID].LastDataSentTimeMS = 0;
+        ChannelInfo* c = &kcp->Channels[channelID];
+        if (c->Enabled) {
+            return;
+        }
+        c->Enabled = 1;
+        c->LastDataSentTimeMS = 0;
     }
 }
 
