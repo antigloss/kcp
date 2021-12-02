@@ -339,7 +339,7 @@ void ikcp_release(ikcpcb* kcp)
 //---------------------------------------------------------------------
 // set output callback, which will be invoked by kcp
 //---------------------------------------------------------------------
-void ikcp_setoutput(ikcpcb* kcp, int (*output)(const char* buf, int len, uint8_t channelID, void* user))
+void ikcp_setoutput(ikcpcb* kcp, void (*output)(const char* buf, int len, uint8_t channelID, void* user))
 {
     kcp->output = output;
 }
