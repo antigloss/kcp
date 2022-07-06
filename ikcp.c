@@ -1153,6 +1153,13 @@ void ikcp_update(ikcpcb* kcp, IUINT32 current)
     }
 }
 
+void ikcp_do_update(ikcpcb* kcp, IUINT32 current)
+{
+    kcp->current = current;
+    kcp->ts_flush = kcp->current + kcp->interval;
+    ikcp_flush(kcp);
+}
+
 //---------------------------------------------------------------------
 // Determine when should you invoke ikcp_update:
 // returns when you should invoke ikcp_update in millisec, if there

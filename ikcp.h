@@ -364,6 +364,7 @@ int ikcp_send(ikcpcb* kcp, const char* buffer, int len);
 // ikcp_check when to call it again (without ikcp_input/_send calling).
 // 'current' - current timestamp in millisec.
 void ikcp_update(ikcpcb* kcp, IUINT32 current);
+void ikcp_do_update(ikcpcb* kcp, IUINT32 current);
 
 // Determine when should you invoke ikcp_update:
 // returns when you should invoke ikcp_update in millisec, if there
