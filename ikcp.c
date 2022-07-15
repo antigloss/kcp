@@ -712,8 +712,10 @@ void ikcp_parse_data(ikcpcb* kcp, IKCPSEG* newseg)
 //---------------------------------------------------------------------
 // input data
 //---------------------------------------------------------------------
-int ikcp_input(ikcpcb* kcp, const char* data, long size, uint8_t channelID)
+int ikcp_input(ikcpcb* kcp, IUINT32 current, const char* data, long size, uint8_t channelID)
 {
+    kcp->current = current;
+
     IUINT32 prev_una = kcp->snd_una;
     IUINT32 maxack = 0, latest_ts = 0;
     int flag = 0;
@@ -760,7 +762,7 @@ int ikcp_input(ikcpcb* kcp, const char* data, long size, uint8_t channelID)
 
         if (cmd == IKCP_CMD_ACK) {
             IUINT32 rtt = kcp->current - ts;
-            if (rtt >= 0 && rtt < 5000) {
+            if (rtt < 5000) {
                 ikcp_update_ack(kcp, rtt, channelID); // 统计RTT
             }
             ikcp_parse_ack(kcp, sn); // 从发送缓存中移除收到了ACK的数据
@@ -1147,7 +1149,6 @@ void ikcp_update(ikcpcb* kcp, IUINT32 current)
 void ikcp_do_update(ikcpcb* kcp, IUINT32 current)
 {
     kcp->current = current;
-    kcp->ts_flush = kcp->current + kcp->interval;
     ikcp_flush(kcp);
 }
 
