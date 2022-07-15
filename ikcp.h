@@ -301,7 +301,7 @@ struct IKCPCB {
     IUINT32 current, interval, ts_flush, xmit;
     IUINT32 nrcv_buf, nsnd_buf;
     IUINT32 nrcv_que, nsnd_que;
-    IUINT32 nodelay, updated;
+    IUINT32 nodelay;
     IUINT32 ts_probe, probe_wait;
     IUINT32 dead_link, incr;
     struct IQUEUEHEAD snd_queue;
@@ -377,9 +377,6 @@ IUINT32 ikcp_check(const ikcpcb* kcp, IUINT32 current);
 
 // when you received a low level packet (eg. UDP packet), call it
 int ikcp_input(ikcpcb* kcp, const char* data, long size, uint8_t channelID);
-
-// flush pending data
-void ikcp_flush(ikcpcb* kcp);
 
 // check the size of next message in the recv queue
 int ikcp_peeksize(const ikcpcb* kcp);

@@ -274,9 +274,8 @@ ikcpcb* ikcp_create(IUINT32 conv, void* user)
     kcp->rx_minrto = IKCP_RTO_MIN;
     kcp->current = 0;
     kcp->interval = IKCP_INTERVAL;
-    kcp->ts_flush = IKCP_INTERVAL;
+    kcp->ts_flush = 0;
     kcp->nodelay = 0;
-    kcp->updated = 0;
     kcp->logmask = 0;
     kcp->ssthresh = IKCP_THRESH_INIT;
     kcp->fastresend = 0;
@@ -889,7 +888,7 @@ static int ikcp_wnd_unused(const ikcpcb* kcp)
 //---------------------------------------------------------------------
 // ikcp_flush
 //---------------------------------------------------------------------
-void ikcp_flush(ikcpcb* kcp)
+static void ikcp_flush(ikcpcb* kcp)
 {
     IUINT32 current = kcp->current;
     IUINT32 resent, cwnd;
@@ -901,7 +900,7 @@ void ikcp_flush(ikcpcb* kcp)
 
     ChannelInfo* c0 = &kcp->Channels[0];
     ChannelInfo* c1 = &kcp->Channels[1];
-    if (kcp->updated == 0 || (!c0->Enabled && !c1->Enabled)) { // 尚未调用ikcp_update或者无可用传输通道
+    if (!c0->Enabled && !c1->Enabled) { // 无可用传输通道
         return;
     }
 
@@ -1128,17 +1127,9 @@ void ikcp_flush(ikcpcb* kcp)
 //---------------------------------------------------------------------
 void ikcp_update(ikcpcb* kcp, IUINT32 current)
 {
-    IINT32 slap;
-
     kcp->current = current;
 
-    if (kcp->updated == 0) {
-        kcp->updated = 1;
-        kcp->ts_flush = kcp->current;
-    }
-
-    slap = _itimediff(kcp->current, kcp->ts_flush);
-
+    IINT32 slap = _itimediff(kcp->current, kcp->ts_flush);
     if (slap >= 10000 || slap < -10000) {
         kcp->ts_flush = kcp->current;
         slap = 0;
@@ -1176,10 +1167,6 @@ IUINT32 ikcp_check(const ikcpcb* kcp, IUINT32 current)
     IINT32 tm_packet = 0x7fffffff;
     IUINT32 minimal = 0;
     struct IQUEUEHEAD* p;
-
-    if (kcp->updated == 0) {
-        return current;
-    }
 
     if (_itimediff(current, ts_flush) >= 10000 || _itimediff(current, ts_flush) < -10000) {
         ts_flush = current;
