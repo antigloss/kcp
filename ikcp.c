@@ -42,6 +42,7 @@ const IUINT32 IKCP_THRESH_MIN = 2;
 const IUINT32 IKCP_PROBE_INIT = 7000;    // 7 secs to probe window size
 const IUINT32 IKCP_PROBE_LIMIT = 120000; // up to 120 secs to probe window
 const IUINT32 IKCP_FASTACK_LIMIT = 5;    // max times to trigger fastack
+const IUINT32 IKCP_HEADER_LEN = 2;
 
 //---------------------------------------------------------------------
 // encode / decode
@@ -264,11 +265,15 @@ ikcpcb* ikcp_create(IUINT32 conv, void* user)
         kcp->Channels[i].AvgRTTDelta = 20;
         kcp->Channels[i].BufferCapacity = kcp->mtu;
         kcp->Channels[i].BufferSize = 0;
-        kcp->Channels[i].Buffer = ikcp_malloc(kcp->mtu);
-        if (kcp->Channels[i].Buffer == NULL) {
+        kcp->Channels[i].Header = ikcp_malloc(kcp->mtu + IKCP_HEADER_LEN);
+        if (kcp->Channels[i].Header == NULL) {
+            for (int j = 0; j != i; ++j) {
+                ikcp_free(kcp->Channels[j].Header);
+            }
             ikcp_free(kcp);
             return NULL;
         }
+        kcp->Channels[i].Buffer = kcp->Channels[i].Header + IKCP_HEADER_LEN;
     }
     kcp->rx_rto = IKCP_RTO_DEF;
     kcp->rx_minrto = IKCP_RTO_MIN;
@@ -318,8 +323,8 @@ void ikcp_release(ikcpcb* kcp)
             ikcp_segment_delete(kcp, seg);
         }
         for (int i = 0; i != kMaxChannelCount; ++i) {
-            ikcp_free(kcp->Channels[i].Buffer);
-            kcp->Channels[i].Buffer = NULL;
+            ikcp_free(kcp->Channels[i].Header);
+            kcp->Channels[i].Header = NULL;
         }
         if (kcp->acklist) {
             ikcp_free(kcp->acklist);
@@ -1207,14 +1212,15 @@ int ikcp_setmtu(ikcpcb* kcp, int mtu)
             continue;
         }
 
-        char* buf = ikcp_malloc(mtu);
+        char* buf = ikcp_malloc(mtu + IKCP_HEADER_LEN);
         if (buf == NULL) {
             return -2;
         }
 
         kcp->Channels[i].BufferCapacity = mtu;
-        free(kcp->Channels[i].Buffer);
-        kcp->Channels[i].Buffer = buf;
+        free(kcp->Channels[i].Header);
+        kcp->Channels[i].Header = buf;
+        kcp->Channels[i].Buffer = buf + IKCP_HEADER_LEN;
     }
 
     kcp->mtu = mtu;
