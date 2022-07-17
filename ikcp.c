@@ -273,6 +273,7 @@ ikcpcb* ikcp_create(IUINT32 conv, void* user)
             ikcp_free(kcp);
             return NULL;
         }
+        kcp->Channels[i].Header[0] = i;
         kcp->Channels[i].Buffer = kcp->Channels[i].Header + IKCP_HEADER_LEN;
     }
     kcp->rx_rto = IKCP_RTO_DEF;
@@ -929,7 +930,7 @@ static void ikcp_flush(ikcpcb* kcp)
         }
 
         if (c->BufferSize > kcp->mss) {
-            kcp->output(c->Buffer, c->BufferSize, ack->ChannelID, kcp->user);
+            kcp->output(c->Header, c->BufferSize + IKCP_HEADER_LEN, ack->ChannelID, kcp->user);
             c->BufferSize = 0;
         }
 
@@ -941,7 +942,7 @@ static void ikcp_flush(ikcpcb* kcp)
     for (uint8_t i = 0; i != kMaxChannelCount; ++i) {
         ChannelInfo* c = &kcp->Channels[i];
         if (c->BufferSize) {
-            kcp->output(c->Buffer, c->BufferSize, i, kcp->user);
+            kcp->output(c->Header, c->BufferSize + IKCP_HEADER_LEN, i, kcp->user);
             c->BufferSize = 0;
         }
     }
@@ -1071,10 +1072,12 @@ static void ikcp_flush(ikcpcb* kcp)
 
             if (c->BufferSize + segment->len > kcp->mss) {
                 if (c0->Enabled) {
-                    kcp->output(c->Buffer, c->BufferSize, 0, kcp->user);
+                    c->Header[0] = 0;
+                    kcp->output(c->Header, c->BufferSize + IKCP_HEADER_LEN, 0, kcp->user);
                 }
                 if (c == c1) {
-                    kcp->output(c->Buffer, c->BufferSize, 1, kcp->user);
+                    c->Header[0] = 1;
+                    kcp->output(c->Header, c->BufferSize + IKCP_HEADER_LEN, 1, kcp->user);
                 }
                 c->BufferSize = 0;
             }
@@ -1092,14 +1095,16 @@ static void ikcp_flush(ikcpcb* kcp)
 
     // flash remain segments
     if (c0->BufferSize) {
-        kcp->output(c0->Buffer, c0->BufferSize, 0, kcp->user);
+        kcp->output(c0->Header, c0->BufferSize + IKCP_HEADER_LEN, 0, kcp->user);
         c0->BufferSize = 0;
     }
     if (c1->BufferSize) {
         if (c0->Enabled) {
-            kcp->output(c1->Buffer, c1->BufferSize, 0, kcp->user);
+            c1->Header[0] = 0;
+            kcp->output(c1->Header, c1->BufferSize + IKCP_HEADER_LEN, 0, kcp->user);
         }
-        kcp->output(c1->Buffer, c1->BufferSize, 1, kcp->user);
+        c1->Header[0] = 1;
+        kcp->output(c1->Header, c1->BufferSize + IKCP_HEADER_LEN, 1, kcp->user);
         c1->BufferSize = 0;
     }
 
@@ -1219,6 +1224,7 @@ int ikcp_setmtu(ikcpcb* kcp, int mtu)
 
         kcp->Channels[i].BufferCapacity = mtu;
         free(kcp->Channels[i].Header);
+        buf[0] = i;
         kcp->Channels[i].Header = buf;
         kcp->Channels[i].Buffer = buf + IKCP_HEADER_LEN;
     }
