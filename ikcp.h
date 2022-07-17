@@ -378,7 +378,7 @@ IUINT32 ikcp_check(const ikcpcb* kcp, IUINT32 current);
 
 // when you received a low level packet (eg. UDP packet), call it
 // 'current' - current timestamp in millisec.
-int ikcp_input(ikcpcb* kcp, IUINT32 current, const char* data, long size, uint8_t channelID);
+int ikcp_input(ikcpcb* kcp, IUINT32 current, const char* data, long size);
 
 // check the size of next message in the recv queue
 int ikcp_peeksize(const ikcpcb* kcp);

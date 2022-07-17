@@ -718,7 +718,7 @@ void ikcp_parse_data(ikcpcb* kcp, IKCPSEG* newseg)
 //---------------------------------------------------------------------
 // input data
 //---------------------------------------------------------------------
-int ikcp_input(ikcpcb* kcp, IUINT32 current, const char* data, long size, uint8_t channelID)
+int ikcp_input(ikcpcb* kcp, IUINT32 current, const char* data, long size)
 {
     kcp->current = current;
 
@@ -730,6 +730,9 @@ int ikcp_input(ikcpcb* kcp, IUINT32 current, const char* data, long size, uint8_
         ikcp_log(kcp, IKCP_LOG_INPUT, "[RI] %d bytes", (int)size);
     }
 
+    uint8_t channelID = data[0];
+    data += IKCP_HEADER_LEN;
+    size -= (long)IKCP_HEADER_LEN;
     if ((int)size < (int)IKCP_OVERHEAD || channelID >= kMaxChannelCount)
         return -1;
 
