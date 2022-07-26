@@ -1060,7 +1060,6 @@ static void ikcp_flush(ikcpcb* kcp)
         }
 
         if (needsend) {
-            int need;
             segment->ts = current;
             segment->wnd = seg.wnd;
             segment->una = kcp->rcv_nxt;
