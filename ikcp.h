@@ -347,67 +347,67 @@ extern "C" {
 // create a new kcp control object, 'conv' must equal in two endpoint
 // from the same connection. 'user' will be passed to the output callback
 // output callback can be setup like this: 'kcp->output = my_udp_output'
-ikcpcb* ikcp_create(IUINT32 conv, void* user);
+ikcpcb* ikcp2_create(IUINT32 conv, void* user);
 
 // release kcp control object
-void ikcp_release(ikcpcb* kcp);
+void ikcp2_release(ikcpcb* kcp);
 
 // set output callback, which will be invoked by kcp
-void ikcp_setoutput(ikcpcb* kcp, void (*output)(const char* buf, int len, uint8_t channelID, void* user));
+void ikcp2_setoutput(ikcpcb* kcp, void (*output)(const char* buf, int len, uint8_t channelID, void* user));
 
 // user/upper level recv: returns size, returns below zero for EAGAIN
-int ikcp_recv(ikcpcb* kcp, char* buffer, int len);
+int ikcp2_recv(ikcpcb* kcp, char* buffer, int len);
 
 // user/upper level send, returns below zero for error
-int ikcp_send(ikcpcb* kcp, const char* buffer, int len);
+int ikcp2_send(ikcpcb* kcp, const char* buffer, int len);
 
 // update state (call it repeatedly, every 10ms-100ms), or you can ask
-// ikcp_check when to call it again (without ikcp_input/_send calling).
+// ikcp2_check when to call it again (without ikcp2_input/_send calling).
 // 'current' - current timestamp in millisec.
-void ikcp_update(ikcpcb* kcp, IUINT32 current);
-void ikcp_do_update(ikcpcb* kcp, IUINT32 current);
+void ikcp2_update(ikcpcb* kcp, IUINT32 current);
+void ikcp2_do_update(ikcpcb* kcp, IUINT32 current);
 
-// Determine when should you invoke ikcp_update:
-// returns when you should invoke ikcp_update in millisec, if there
-// is no ikcp_input/_send calling. you can call ikcp_update in that
+// Determine when should you invoke ikcp2_update:
+// returns when you should invoke ikcp2_update in millisec, if there
+// is no ikcp2_input/_send calling. you can call ikcp2_update in that
 // time, instead of call update repeatly.
-// Important to reduce unnacessary ikcp_update invoking. use it to
-// schedule ikcp_update (eg. implementing an epoll-like mechanism,
-// or optimize ikcp_update when handling massive kcp connections)
-IUINT32 ikcp_check(const ikcpcb* kcp, IUINT32 current);
+// Important to reduce unnacessary ikcp2_update invoking. use it to
+// schedule ikcp2_update (eg. implementing an epoll-like mechanism,
+// or optimize ikcp2_update when handling massive kcp connections)
+IUINT32 ikcp2_check(const ikcpcb* kcp, IUINT32 current);
 
 // when you received a low level packet (eg. UDP packet), call it
 // 'current' - current timestamp in millisec.
-int ikcp_input(ikcpcb* kcp, IUINT32 current, const char* data, long size);
+int ikcp2_input(ikcpcb* kcp, IUINT32 current, const char* data, long size);
 
 // check the size of next message in the recv queue
-int ikcp_peeksize(const ikcpcb* kcp);
+int ikcp2_peeksize(const ikcpcb* kcp);
 
 // change MTU size, default is 1400
-int ikcp_setmtu(ikcpcb* kcp, int mtu);
+int ikcp2_setmtu(ikcpcb* kcp, int mtu);
 
 // set maximum window size: sndwnd=32, rcvwnd=32 by default
-int ikcp_wndsize(ikcpcb* kcp, int sndwnd, int rcvwnd);
+int ikcp2_wndsize(ikcpcb* kcp, int sndwnd, int rcvwnd);
 
 // get how many packet is waiting to be sent
-int ikcp_waitsnd(const ikcpcb* kcp);
+int ikcp2_waitsnd(const ikcpcb* kcp);
 
-// fastest: ikcp_nodelay(kcp, 1, 20, 2, 1)
+// fastest: ikcp2_nodelay(kcp, 1, 20, 2, 1)
 // nodelay: 0:disable(default), 1:enable
 // interval: internal update timer interval in millisec, default is 100ms
 // resend: 0:disable fast resend(default), 1:enable fast resend
 // nc: 0:normal congestion control(default), 1:disable congestion control
-int ikcp_nodelay(ikcpcb* kcp, int nodelay, int interval, int resend, int nc);
+int ikcp2_nodelay(ikcpcb* kcp, int nodelay, int interval, int resend, int nc);
 
-void ikcp_log(ikcpcb* kcp, int mask, const char* fmt, ...);
+void ikcp2_log(ikcpcb* kcp, int mask, const char* fmt, ...);
 
 // setup allocator
-void ikcp_allocator(void* (*new_malloc)(size_t), void (*new_free)(void*));
+void ikcp2_allocator(void* (*new_malloc)(size_t), void (*new_free)(void*));
 
 // read conv
-IUINT32 ikcp_getconv(const void* ptr);
+IUINT32 ikcp2_getconv(const void* ptr);
 
-inline void ikcp_enable_channel(ikcpcb* kcp, uint8_t channelID)
+inline void ikcp2_enable_channel(ikcpcb* kcp, uint8_t channelID)
 {
     if (channelID < kMaxChannelCount) {
         ChannelInfo* c = &kcp->Channels[channelID];
@@ -419,7 +419,7 @@ inline void ikcp_enable_channel(ikcpcb* kcp, uint8_t channelID)
     }
 }
 
-inline void ikcp_disable_channel(ikcpcb* kcp, uint8_t channelID)
+inline void ikcp2_disable_channel(ikcpcb* kcp, uint8_t channelID)
 {
     if (channelID < kMaxChannelCount) {
         kcp->Channels[channelID].Enabled = 0;

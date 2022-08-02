@@ -71,7 +71,7 @@ vcpkg中的kcp库由Microsoft团队成员和社区贡献者保持最新状态。
    ```cpp
    // 初始化 kcp对象，conv为一个表示会话编号的整数，和tcp的 conv一样，通信双
    // 方需保证 conv相同，相互的数据包才能够被认可，user是一个给回调函数的指针
-   ikcpcb *kcp = ikcp_create(conv, user);
+   ikcpcb *kcp = ikcp2_create(conv, user);
    ```
 
 2. 设置回调函数：
@@ -91,19 +91,19 @@ vcpkg中的kcp库由Microsoft团队成员和社区贡献者保持最新状态。
 3. 循环调用 update：
 
    ```cpp
-   // 以一定频率调用 ikcp_update来更新 kcp状态，并且传入当前时钟（毫秒单位）
-   // 如 10ms调用一次，或用 ikcp_check确定下次调用 update的时间不必每次调用
-   ikcp_update(kcp, millisec);
+   // 以一定频率调用 ikcp2_update来更新 kcp状态，并且传入当前时钟（毫秒单位）
+   // 如 10ms调用一次，或用 ikcp2_check确定下次调用 update的时间不必每次调用
+   ikcp2_update(kcp, millisec);
    ```
 
 4. 输入一个下层数据包：
 
    ```cpp
    // 收到一个下层数据包（比如UDP包）时需要调用：
-   ikcp_input(kcp, received_udp_packet, received_udp_size);
+   ikcp2_input(kcp, received_udp_packet, received_udp_size);
    ```
-   处理了下层协议的输出/输入后 KCP协议就可以正常工作了，使用 ikcp_send 来向
-   远端发送数据。而另一端使用 ikcp_recv(kcp, ptr, size)来接收数据。
+   处理了下层协议的输出/输入后 KCP协议就可以正常工作了，使用 ikcp2_send 来向
+   远端发送数据。而另一端使用 ikcp2_recv(kcp, ptr, size)来接收数据。
 
 
 # 协议配置
@@ -112,25 +112,25 @@ vcpkg中的kcp库由Microsoft团队成员和社区贡献者保持最新状态。
 
 1. 工作模式：
    ```cpp
-   int ikcp_nodelay(ikcpcb *kcp, int nodelay, int interval, int resend, int nc)
+   int ikcp2_nodelay(ikcpcb *kcp, int nodelay, int interval, int resend, int nc)
    ```
 
    - nodelay ：是否启用 nodelay模式，0不启用；1启用。
    - interval ：协议内部工作的 interval，单位毫秒，比如 10ms或者 20ms
    - resend ：快速重传模式，默认0关闭，可以设置2（2次ACK跨越将会直接重传）
    - nc ：是否关闭流控，默认是0代表不关闭，1代表关闭。
-   - 普通模式： ikcp_nodelay(kcp, 0, 40, 0, 0);
-   - 极速模式： ikcp_nodelay(kcp, 1, 10, 2, 1);
+   - 普通模式： ikcp2_nodelay(kcp, 0, 40, 0, 0);
+   - 极速模式： ikcp2_nodelay(kcp, 1, 10, 2, 1);
 
 2. 最大窗口：
    ```cpp
-   int ikcp_wndsize(ikcpcb *kcp, int sndwnd, int rcvwnd);
+   int ikcp2_wndsize(ikcpcb *kcp, int sndwnd, int rcvwnd);
    ```
    该调用将会设置协议的最大发送窗口和最大接收窗口大小，默认为32. 这个可以理解为 TCP的 SND_BUF 和 RCV_BUF，只不过单位不一样 SND/RCV_BUF 单位是字节，这个单位是包。
 
 3. 最大传输单元：
 
-   纯算法协议并不负责探测 MTU，默认 mtu是1400字节，可以使用ikcp_setmtu来设置该值。该值将会影响数据包归并及分片时候的最大传输单元。
+   纯算法协议并不负责探测 MTU，默认 mtu是1400字节，可以使用ikcp2_setmtu来设置该值。该值将会影响数据包归并及分片时候的最大传输单元。
 
 4. 最小RTO：
 

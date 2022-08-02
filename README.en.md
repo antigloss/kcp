@@ -68,7 +68,7 @@ The kcp port in vcpkg is kept up to date by Microsoft team members and community
    // same as the conv of tcp, both communication sides shall ensure the same conv, 
    // so that mutual data packets can be recognized, user is a pointer which will be 
    // passed to the callback function.
-   ikcpcb *kcp = ikcp_create(conv, user);
+   ikcpcb *kcp = ikcp2_create(conv, user);
    ```
 
 2. Set the callback function:
@@ -89,21 +89,21 @@ The kcp port in vcpkg is kept up to date by Microsoft team members and community
 3. Call update in an interval:
 
    ```cpp
-   // Call ikcp_update at a certain frequency to update the kcp state, and pass in 
+   // Call ikcp2_update at a certain frequency to update the kcp state, and pass in 
    // the current clock (in milliseconds). If the call is executed every 10ms, or 
-   // ikcp_check is used to determine time of the next call for update, no need to 
+   // ikcp2_check is used to determine time of the next call for update, no need to 
    // call every time;
-   ikcp_update(kcp, millisec);
+   ikcp2_update(kcp, millisec);
    ```
 
 4. Input a lower layer data packet:
 
    ```cpp
    // Need to call when a lower layer data packet (such as UDP packet)is received:
-   ikcp_input(kcp, received_udp_packet, received_udp_size);
+   ikcp2_input(kcp, received_udp_packet, received_udp_size);
    ```
 
-   After processing the output / input of the lower layer protocols, KCP protocol can work normally, and ikcp_send is used to send data to the remote end. While the other end uses ikcp_recv (kcp, ptr, size) to receive the data.
+   After processing the output / input of the lower layer protocols, KCP protocol can work normally, and ikcp2_send is used to send data to the remote end. While the other end uses ikcp2_recv (kcp, ptr, size) to receive the data.
 
 
 # Protocol Configuration
@@ -112,25 +112,25 @@ The protocol default mode is a standard ARQ, and various acceleration switches c
 
 1. Working Mode:
    ```cpp
-   int ikcp_nodelay(ikcpcb *kcp, int nodelay, int interval, int resend, int nc)
+   int ikcp2_nodelay(ikcpcb *kcp, int nodelay, int interval, int resend, int nc)
    ```
 
    - `nodelay` : Whether nodelay mode is enabled, 0 is not enabled; 1 enabled.
    - `interval` ：Protocol internal work interval, in milliseconds, such as 10 ms or 20 ms.
    - `resend` ：Fast retransmission mode, 0 represents off by default, 2 can be set (2 ACK spans will result in direct retransmission)
    - `nc` ：Whether to turn off flow control, 0 represents “Do not turn off” by default, 1 represents “Turn off”.
-   - Normal Mode: ikcp_nodelay(kcp, 0, 40, 0, 0);
-   - Turbo Mode： ikcp_nodelay(kcp, 1, 10, 2, 1);
+   - Normal Mode: ikcp2_nodelay(kcp, 0, 40, 0, 0);
+   - Turbo Mode： ikcp2_nodelay(kcp, 1, 10, 2, 1);
 
 2. Window Size:
    ```cpp
-   int ikcp_wndsize(ikcpcb *kcp, int sndwnd, int rcvwnd);
+   int ikcp2_wndsize(ikcpcb *kcp, int sndwnd, int rcvwnd);
    ```
    The call will set the maximum send window and maximum receive window size of the procotol, which is 32 by default. This can be understood as SND_BUF and RCV_BUF of TCP, but the unit is not the same, SND / RCV_BUF unit is byte, while this unit is the packet.
 
 3. Maximum Transmission Unit:
 
-   Pure algorithm protocol is not responsible for MTU detection, the default mtu is 1400 bytes, which can be set using ikcp_setmtu. The value will affect the maximum transmission unit upon data packet merging and fragmentation.
+   Pure algorithm protocol is not responsible for MTU detection, the default mtu is 1400 bytes, which can be set using ikcp2_setmtu. The value will affect the maximum transmission unit upon data packet merging and fragmentation.
 
 4. Minimum RTO:
 
